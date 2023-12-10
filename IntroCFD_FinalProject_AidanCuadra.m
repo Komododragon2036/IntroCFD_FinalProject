@@ -900,6 +900,8 @@ global artviscx artviscy
 
 
 
+
+
 end
 %************************************************************************
 function SGS_forward_sweep(~)
@@ -1093,7 +1095,17 @@ global u uold dt fp1
 % !************ADD CODING HERE FOR INTRO CFD STUDENTS************ */
 % !************************************************************** */
 
+for j=2:jmax-1
+    for i=2:imax-1
+        p_resid = (u(i,j,1) - uold(i,j,1))./dt;
+        u_resid = (u(i,j,2) - uold(i,j,2))./dt;
+        v_resid = (u(i,j,3) - uold(i,j,3))./dt;
+    end
+end
 
+p_L2 = sqrt(sum(sum(p_resid))./n);
+u_L2 = sqrt(sum(sum(u_resid))./n);
+v_L2 = sqrt(sum(sum(v_resid))./n);
 
 
 % Write iterative residuals every 10 iterations
