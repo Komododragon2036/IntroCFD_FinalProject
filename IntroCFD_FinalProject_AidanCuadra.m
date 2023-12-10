@@ -493,6 +493,19 @@ global u
 % !************ADD CODING HERE FOR INTRO CFD STUDENTS************ */
 % !************************************************************** */
 
+% Side Walls
+
+
+
+
+% Top Wall
+
+
+
+
+
+
+
 
 
 end
@@ -501,7 +514,7 @@ function bndrymms(~)
 %
 %Uses global variable(s): two, imax, jmax, neq, xmax, xmin, ymax, ymin, rlength
 %To modify: u
-% i                        % i index (x direction)
+% i                        % i index (x direction)boundary
 % j                        % j index (y direction)
 % k                        % k index (# of equations)
 % x        % Temporary variable for x location
@@ -1002,11 +1015,26 @@ global u uold artviscx artviscy dt s
 % !************ADD CODING HERE FOR INTRO CFD STUDENTS************ */
 % !************************************************************** */
 
+% Loop for i and j
 
+for j=2:jmax-1
+    for i=2:imax-1
 
+        % Point jacobi for pressure and velocity components
 
+        p_iter = u(i,j,1) - beta2(i,j).*dt.*(rho.*(half.*(u(i+1,j,2)-u(i-1,j,2))./dx)+(half.*(u(i,j+1,3)-u(i,j-1,3))./dy) - (artviscx + artviscy) - s(i,j,1));
+        u_iter = u(i,j,2) - (dt./rho).*((rho.*u(i,j,2).*(half.*(u(i+1,j,2)-u(i-1,j,2))./dx) + rho.*u(i,j,3).*(half.*(u(i,j+1,2)-u(i,j-1,2))./dy) + half.*(u(i+1,j,1)-u(i-1,j,1))./dx) - rmu.*((u(i+1,j,2) - two.*u(i,j,2) + u(i-1,j,2))./(dx.^2)) - rmu.*((u(i,j+1,2) - two.*u(i,j,2) + u(i,j-1,2))./(dy.^2)) - s(i,j,2)); 
+        v_iter = u(i,j,3) - (dt./rho).*((rho.*u(i,j,2).*(half.*(u(i+1,j,3)-u(i-1,j,3))./dx) + rho.*u(i,j,3).*(half.*(u(i,j+1,3)-u(i,j-1,3))./dy) + half.*(u(i+1,j,1)-u(i-1,j,1))./dx) - rmu.*((u(i+1,j,3) - two.*u(i,j,3) + u(i-1,j,3))./(dx.^2)) - rmu.*((u(i,j+1,3) - two.*u(i,j,3) + u(i,j-1,3))./(dy.^2)) - s(i,j,3));
+
+    end
+end
+
+u(:,:,1) = p_iter;
+u(:,:,2) = u_iter;
+u(:,:,3) = v_iter;
 
 end
+
 %************************************************************************
 function pressure_rescaling(~)
 %
@@ -1064,7 +1092,6 @@ global u uold dt fp1
 % !************************************************************** */
 % !************ADD CODING HERE FOR INTRO CFD STUDENTS************ */
 % !************************************************************** */
-
 
 
 
