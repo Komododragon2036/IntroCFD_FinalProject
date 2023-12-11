@@ -493,19 +493,52 @@ global u
 % !************ADD CODING HERE FOR INTRO CFD STUDENTS************ */
 % !************************************************************** */
 
-% Side Walls
+% Side Wall Boundary Conditions
 
+u(imax,:,2) = zero;
+u(1,:,2) = zero;
+u(imax,:,3) = zero;
+u(1,:,3) = zero;
+u(imax,:,1) = two.*u(imax - 1,:,1) - u(imax - 2,:,1);
+u(1,:,1) = two.*u(2,:,1) - two.*u(3,:,1);
+xvisc(imax,:) = zero;
+yvisc(imax,:) = zero;
+xvisc(1,:) = zero;
+yvisc(1,:) = zero;
 
+% Bottom Wall Boundary Conditions
 
+u(:,1,2) = zero;
+u(:,1,3) = zero;
+u(:,1,1) = two.*u(:,2,1) - u(:,3,1);
+xvisc(:,1) = zero;
+yvisc(:,1) = zero;
 
-% Top Wall
+% Top Wall Boundary Conditions
 
+u(:,jmax,2) = uinf;
+u(:,jmax,3) = zero;
+u(:,jmax,1) = two.*u(:,jmax-1,1) - u(:,jmax-2,1);
 
+xvisc(:,jmax) = zero; % UNSURE ABOUT THESE VISCOUS TERMS
+yvisc(:,jmax) = zero;
 
+% Corner
 
+u(imax,jmax,1) = (u(imax,jmax-1,1) + u(imax-1,jmax,1)).*half;
+u(1,jmax,1) = (u(1,jmax-1,1) + u(2,jmax,1)).*half;
+u(imax,1,1) = (u(imax-1,1,1) + u(imax,2,1)).*half;
+u(1,1,1) = (u(2,1,1) + u(1,2,1)).*half;
 
+xvisc(imax,jmax) = (xvisc(imax,jmax-1) + xvisc(imax-1,jmax)).*half;
+xvisc(1,jmax) = (xvisc(1,jmax-1) + xvisc(2,jmax)).*half;
+xvisc(imax,1) = (xvisc(imax-1,1) + xvisc(imax,2)).*half;
+xvisc(1,1) = (xvisc(2,1) + xvisc(1,2)).*half;
 
-
+yvisc(imax,jmax) = (yvisc(imax,jmax-1) + yvisc(imax-1,jmax)).*half;
+yvisc(1,jmax) = (yvisc(1,jmax-1) + yvisc(2,jmax)).*half;
+yvisc(imax,1) = (yvisc(imax-1,1) + yvisc(imax,2)).*half;
+yvisc(1,1) = (yvisc(2,1) + yvisc(1,2)).*half;
 
 
 end
@@ -859,8 +892,20 @@ global u dt
 % !************ADD CODING HERE FOR INTRO CFD STUDENTS************ */
 % !************************************************************** */
 
+nu = rmu/rho;
+dtdiff = (dx.*dy)./(4.*nu);
 
+for j=2:jmax-1
+    for i=2:imax-1
+      lambda_x(i,j) = half.*(abs(u(i,j,2)) + sqrt(((u(i,j,2)).^2) + four.*beta(i,j)));
+      lambda_y(i,j) = half.*(abs(u(i,j,3)) + sqrt(((u(i,j,3)).^2) + four.*beta(i,j)));
+      lambda_max(i,j) = max(max(lambda_x,lambda_y));
+      dtconv(i,j) = min(dx,dy)./lambda_max;
+      dt(i,j) = cfl.*min(dtcov(i,j),dtdiff);
+    end
+end
 
+dtmin = dt(i,j);
 
 end
 %************************************************************************
@@ -897,9 +942,10 @@ global artviscx artviscy
 % !************ADD CODING HERE FOR INTRO CFD STUDENTS************ */
 % !************************************************************** */
 
+% Artificial Viscosity Equations
 
-
-
+artviscx = (-lambdax.*Cx.*(dx.^3)./beta2(i,j)).*((u(i+2,j,1) - four.*u(i+1,j,1) + six.*u(i,j,1) - four.*u(i-1,j,1) + u(i-2,j,1))./(dx.^4));
+artviscy = (-lambday.*Cy.*(dy.^3)./beta2(i,j)).*((u(i,j+2,1) - four.*u(i,j+1,1) + six.*u(i,j,1) - four.*u(i,j-1,1) + u(i,j-2,1))./(dy.^4));
 
 
 end
@@ -1019,21 +1065,20 @@ global u uold artviscx artviscy dt s
 
 % Loop for i and j
 
+
 for j=2:jmax-1
     for i=2:imax-1
+        if n == 1
+            uold(:,:,:) = 42069;
 
-        % Point jacobi for pressure and velocity components
+            % Point jacobi for pressure and velocity components
 
-        p_iter = u(i,j,1) - beta2(i,j).*dt.*(rho.*(half.*(u(i+1,j,2)-u(i-1,j,2))./dx)+(half.*(u(i,j+1,3)-u(i,j-1,3))./dy) - (artviscx + artviscy) - s(i,j,1));
-        u_iter = u(i,j,2) - (dt./rho).*((rho.*u(i,j,2).*(half.*(u(i+1,j,2)-u(i-1,j,2))./dx) + rho.*u(i,j,3).*(half.*(u(i,j+1,2)-u(i,j-1,2))./dy) + half.*(u(i+1,j,1)-u(i-1,j,1))./dx) - rmu.*((u(i+1,j,2) - two.*u(i,j,2) + u(i-1,j,2))./(dx.^2)) - rmu.*((u(i,j+1,2) - two.*u(i,j,2) + u(i,j-1,2))./(dy.^2)) - s(i,j,2)); 
-        v_iter = u(i,j,3) - (dt./rho).*((rho.*u(i,j,2).*(half.*(u(i+1,j,3)-u(i-1,j,3))./dx) + rho.*u(i,j,3).*(half.*(u(i,j+1,3)-u(i,j-1,3))./dy) + half.*(u(i+1,j,1)-u(i-1,j,1))./dx) - rmu.*((u(i+1,j,3) - two.*u(i,j,3) + u(i-1,j,3))./(dx.^2)) - rmu.*((u(i,j+1,3) - two.*u(i,j,3) + u(i,j-1,3))./(dy.^2)) - s(i,j,3));
-
+            u(i,j,1) = uold(i,j,1) - beta2(i,j).*dt.*(rho.*(half.*(uold(i+1,j,2)-uold(i-1,j,2))./dx)+(half.*(uold(i,j+1,3)-uold(i,j-1,3))./dy) - (artviscx + artviscy) - s(i,j,1));
+            u(i,j,2) = uold(i,j,2) - (dt./rho).*((rho.*uold(i,j,2).*(half.*(uold(i+1,j,2)-uold(i-1,j,2))./dx) + rho.*uold(i,j,3).*(half.*(uold(i,j+1,2)-uold(i,j-1,2))./dy) + half.*(uold(i+1,j,1)-uold(i-1,j,1))./dx) - rmu.*((uold(i+1,j,2) - two.*uold(i,j,2) + uold(i-1,j,2))./(dx.^2)) - rmu.*((uold(i,j+1,2) - two.*uold(i,j,2) + uold(i,j-1,2))./(dy.^2)) - s(i,j,2)); 
+            u(i,j,3) = uold(i,j,3) - (dt./rho).*((rho.*uold(i,j,2).*(half.*(uold(i+1,j,3)-uold(i-1,j,3))./dx) + rho.*uold(i,j,3).*(half.*(uold(i,j+1,3)-uold(i,j-1,3))./dy) + half.*(uold(i+1,j,1)-uold(i-1,j,1))./dx) - rmu.*((uold(i+1,j,3) - two.*uold(i,j,3) + uold(i-1,j,3))./(dx.^2)) - rmu.*((uold(i,j+1,3) - two.*uold(i,j,3) + uold(i,j-1,3))./(dy.^2)) - s(i,j,3));
+        end
     end
 end
-
-u(:,:,1) = p_iter;
-u(:,:,2) = u_iter;
-u(:,:,3) = v_iter;
 
 end
 
@@ -1147,7 +1192,9 @@ if imms==1
 % !************ADD CODING HERE FOR INTRO CFD STUDENTS************ */
 % !************************************************************** */
 
-
+rL1norm = norm(abs(u - ummsArray),1);
+rL2norm = norm(abs(u - ummsArray),2);
+rLinfnorm = norm(abs(u - ummsArray),inf);
 
 
 end
