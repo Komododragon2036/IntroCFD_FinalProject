@@ -56,8 +56,8 @@ six    = 6.0;
 
 nmax = 500000;        % Maximum number of iterations
 iterout = 5000;       % Number of time steps between solution output
-imms = 1;             % Manufactured solution flag: = 1 for manuf. sol., = 0 otherwise
-isgs = 1;             % Symmetric Gauss-Seidel  flag: = 1 for SGS, = 0 for point Jacobi
+imms = 0;             % Manufactured solution flag: = 1 for manuf. sol., = 0 otherwise
+isgs = 0;             % Symmetric Gauss-Seidel  flag: = 1 for SGS, = 0 for point Jacobi
 irstr = 0;            % Restart flag: = 1 for restart (file 'restart.in', = 0 for initial run
 ipgorder = 0;         % Order of pressure gradient: 0 = 2nd, 1 = 3rd (not needed)
 lim = 1;              % variable to be used as the limiter sensor (= 1 for pressure)
@@ -503,16 +503,12 @@ u(imax,:,1) = two.*u(imax - 1,:,1) - u(imax - 2,:,1);
 u(1,:,1) = two.*u(2,:,1) - two.*u(3,:,1);
 xvisc(imax,:) = zero;
 yvisc(imax,:) = zero;
-xvisc(1,:) = zero;
-yvisc(1,:) = zero;
 
 % Bottom Wall Boundary Conditions
 
 u(:,1,2) = zero;
 u(:,1,3) = zero;
 u(:,1,1) = two.*u(:,2,1) - u(:,3,1);
-xvisc(:,1) = zero;
-yvisc(:,1) = zero;
 
 % Top Wall Boundary Conditions
 
@@ -520,25 +516,12 @@ u(:,jmax,2) = uinf;
 u(:,jmax,3) = zero;
 u(:,jmax,1) = two.*u(:,jmax-1,1) - u(:,jmax-2,1);
 
-xvisc(:,jmax) = zero; % UNSURE ABOUT THESE VISCOUS TERMS
-yvisc(:,jmax) = zero;
-
 % Corner
 
 u(imax,jmax,1) = (u(imax,jmax-1,1) + u(imax-1,jmax,1)).*half;
 u(1,jmax,1) = (u(1,jmax-1,1) + u(2,jmax,1)).*half;
 u(imax,1,1) = (u(imax-1,1,1) + u(imax,2,1)).*half;
 u(1,1,1) = (u(2,1,1) + u(1,2,1)).*half;
-
-xvisc(imax,jmax) = (xvisc(imax,jmax-1) + xvisc(imax-1,jmax)).*half;
-xvisc(1,jmax) = (xvisc(1,jmax-1) + xvisc(2,jmax)).*half;
-xvisc(imax,1) = (xvisc(imax-1,1) + xvisc(imax,2)).*half;
-xvisc(1,1) = (xvisc(2,1) + xvisc(1,2)).*half;
-
-yvisc(imax,jmax) = (yvisc(imax,jmax-1) + yvisc(imax-1,jmax)).*half;
-yvisc(1,jmax) = (yvisc(1,jmax-1) + yvisc(2,jmax)).*half;
-yvisc(imax,1) = (yvisc(imax-1,1) + yvisc(imax,2)).*half;
-yvisc(1,1) = (yvisc(2,1) + yvisc(1,2)).*half;
 
 
 end
@@ -884,7 +867,7 @@ function [dtmin] = compute_time_step(dtmin)
 % dtconv       % Local convective time step restriction
 
 global four half fourth
-global vel2ref rmu rho dx dy cfl rkappa imax jmax
+global vel2ref rmu rho dx dy cfl rkappa imax jmax uinf beta2 lambda_x lambda_y lambda_max dtconv
 global u dt
 
 
@@ -897,11 +880,12 @@ dtdiff = (dx.*dy)./(4.*nu);
 
 for j=2:jmax-1
     for i=2:imax-1
-      lambda_x(i,j) = half.*(abs(u(i,j,2)) + sqrt(((u(i,j,2)).^2) + four.*beta(i,j)));
-      lambda_y(i,j) = half.*(abs(u(i,j,3)) + sqrt(((u(i,j,3)).^2) + four.*beta(i,j)));
-      lambda_max(i,j) = max(max(lambda_x,lambda_y));
-      dtconv(i,j) = min(dx,dy)./lambda_max;
-      dt(i,j) = cfl.*min(dtcov(i,j),dtdiff);
+      beta2(i,j) = max((u(i,j,2).^2) + (u(i,j,3).^2),rkappa*(uinf^2));
+      lambda_x(i,j) = half.*(abs(u(i,j,2)) + sqrt(((u(i,j,2)).^2) + four.*beta2(i,j)));
+      lambda_y(i,j) = half.*(abs(u(i,j,3)) + sqrt(((u(i,j,3)).^2) + four.*beta2(i,j)));
+      lambda_max(i,j) = max(max(lambda_x(i,j),lambda_y(i,j)));
+      dtconv(i,j) = min(dx,dy)./lambda_max(i,j);
+      dt(i,j) = cfl.*min(dtconv(i,j),dtdiff);
     end
 end
 
@@ -933,7 +917,7 @@ function Compute_Artificial_Viscosity(~)
 % not used]
 
 global two four six half
-global imax jmax lim rho dx dy Cx Cy Cx2 Cy2 fsmall vel2ref rkappa
+global imax jmax lim rho dx dy Cx Cy Cx2 Cy2 fsmall vel2ref rkappa lambda_x lambda_y beta2 zero
 global u
 global artviscx artviscy
 
@@ -944,8 +928,32 @@ global artviscx artviscy
 
 % Artificial Viscosity Equations
 
-artviscx = (-lambdax.*Cx.*(dx.^3)./beta2(i,j)).*((u(i+2,j,1) - four.*u(i+1,j,1) + six.*u(i,j,1) - four.*u(i-1,j,1) + u(i-2,j,1))./(dx.^4));
-artviscy = (-lambday.*Cy.*(dy.^3)./beta2(i,j)).*((u(i,j+2,1) - four.*u(i,j+1,1) + six.*u(i,j,1) - four.*u(i,j-1,1) + u(i,j-2,1))./(dy.^4));
+for j=3:jmax-2
+    for i=3:imax-2
+     artviscx(i,j) = (-lambda_x(i,j).*Cx.*(dx.^3)./beta2(i,j)).*((u(i+2,j,1) - four.*u(i+1,j,1) + six.*u(i,j,1) - four.*u(i-1,j,1) + u(i-2,j,1))./(dx.^4));
+     artviscy(i,j) = (-lambda_y(i,j).*Cy.*(dy.^3)./beta2(i,j)).*((u(i,j+2,1) - four.*u(i,j+1,1) + six.*u(i,j,1) - four.*u(i,j-1,1) + u(i,j-2,1))./(dy.^4));
+    end
+end
+
+xvisc(imax,:) = zero;
+yvisc(imax,:) = zero;
+xvisc(1,:) = zero;
+yvisc(1,:) = zero;
+xvisc(:,1) = zero;
+yvisc(:,1) = zero;
+xvisc(:,jmax) = zero; % UNSURE ABOUT THESE VISCOUS TERMS
+yvisc(:,jmax) = zero;
+
+xvisc(imax,jmax) = (xvisc(imax,jmax-1) + xvisc(imax-1,jmax)).*half;
+xvisc(1,jmax) = (xvisc(1,jmax-1) + xvisc(2,jmax)).*half;
+xvisc(imax,1) = (xvisc(imax-1,1) + xvisc(imax,2)).*half;
+xvisc(1,1) = (xvisc(2,1) + xvisc(1,2)).*half;
+
+yvisc(imax,jmax) = (yvisc(imax,jmax-1) + yvisc(imax-1,jmax)).*half;
+yvisc(1,jmax) = (yvisc(1,jmax-1) + yvisc(2,jmax)).*half;
+yvisc(imax,1) = (yvisc(imax-1,1) + yvisc(imax,2)).*half;
+yvisc(1,1) = (yvisc(2,1) + yvisc(1,2)).*half;
+
 
 
 end
@@ -1055,7 +1063,7 @@ function point_Jacobi(~)
 % uvel2        % Velocity squared
 global two half
 global imax jmax rho rhoinv dx dy rkappa rmu vel2ref
-global u uold artviscx artviscy dt s
+global u uold artviscx artviscy dt s n
 
 % Point Jacobi method
 
@@ -1069,7 +1077,7 @@ global u uold artviscx artviscy dt s
 for j=2:jmax-1
     for i=2:imax-1
         if n == 1
-            uold(:,:,:) = 42069;
+            uold(:,:,:) = 9; % Arbitrary
 
             % Point jacobi for pressure and velocity components
 
@@ -1131,7 +1139,7 @@ function [res, resinit, conv] = check_iterative_convergence...
 % k                        % k index (# of equations)
 
 global zero
-global imax jmax neq fsmall
+global imax jmax neq fsmall p1_L2 u1_L2 v1_L2 beta2
 global u uold dt fp1
 
 % Compute iterative residuals to monitor iterative convergence
@@ -1140,21 +1148,40 @@ global u uold dt fp1
 % !************ADD CODING HERE FOR INTRO CFD STUDENTS************ */
 % !************************************************************** */
 
+p_resid = zeros(imax-2);
+u_resid = zeros(imax-2);
+v_resid = zeros(imax-2);
+
+
 for j=2:jmax-1
     for i=2:imax-1
-        p_resid = (u(i,j,1) - uold(i,j,1))./dt;
-        u_resid = (u(i,j,2) - uold(i,j,2))./dt;
-        v_resid = (u(i,j,3) - uold(i,j,3))./dt;
+        if n == 1
+            uold(:,:,:) = -1;
+
+            p_resid = (u(i,j,1) - uold(i,j,1))./(beta2(i,j).*dt);
+            u_resid = (u(i,j,2) - uold(i,j,2))./(beta2(i,j).*dt);
+            v_resid = (u(i,j,3) - uold(i,j,3))./(beta2(i,j).*dt);
+
+        end
     end
 end
 
-p_L2 = sqrt(sum(sum(p_resid))./n);
-u_L2 = sqrt(sum(sum(u_resid))./n);
-v_L2 = sqrt(sum(sum(v_resid))./n);
+p_L2 = norm(p_resid);
+u_L2 = norm(u_resid);
+v_L2 = norm(v_resid);
 
+if n == 1
+    p1_L2 = p_L2;
+    u1_L2 = u_L2;
+    v1_L2 = v_L2;
+end
+
+conv = max([p_L2./p1_L2, u_L2./u1_L2, v_L2./v1_L2]);
+res = [p_L2,u_L2,v_L2];
+resinit = [p1_L2,u1_L2,v1_L2];
 
 % Write iterative residuals every 10 iterations
-if ( (mod(n,10)==0)||(n==ninit) )
+if ( (mod(n,100)==0)||(n==ninit) )
     fprintf(fp1, '%d %e %e %e %e\n',n, rtime, res(1), res(2), res(3) );
     fprintf('%d   %e   %e   %e   %e   %e\n',n, rtime, dtmin, res(1), res(2), res(3) );
     % Maybe a need to format this better
@@ -1184,7 +1211,7 @@ function Discretization_Error_Norms(rL1norm, rL2norm, rLinfnorm)
 % y        % Temporary variable for y location
 % DE   	% Discretization error (absolute value)
 
-global zero imax jmax neq imms xmax xmin ymax ymin u
+global zero imax jmax neq imms xmax xmin ymax ymin u 
 
 if imms==1
 
@@ -1192,10 +1219,13 @@ if imms==1
 % !************ADD CODING HERE FOR INTRO CFD STUDENTS************ */
 % !************************************************************** */
 
-rL1norm = norm(abs(u - ummsArray),1);
-rL2norm = norm(abs(u - ummsArray),2);
-rLinfnorm = norm(abs(u - ummsArray),inf);
-
+for j = 1:jmax
+    for i = 1:imax
+        rL1norm = norm(abs(u(i,j,2) - umms(i,j,2)),1);
+        rL2norm = norm(abs(u(i,j,2) - umms(i,j,2)),2);
+        rLinfnorm = norm(abs(u(i,j,2) - umms(i,j,2)),inf);
+    end
+end
 
 end
 
