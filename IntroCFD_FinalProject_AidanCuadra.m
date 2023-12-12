@@ -501,8 +501,8 @@ u(imax,:,3) = zero;
 u(1,:,3) = zero;
 u(imax,:,1) = two.*u(imax - 1,:,1) - u(imax - 2,:,1);
 u(1,:,1) = two.*u(2,:,1) - two.*u(3,:,1);
-xvisc(imax,:) = zero;
-yvisc(imax,:) = zero;
+%xvisc(imax,:) = zero;
+%yvisc(imax,:) = zero;
 
 % Bottom Wall Boundary Conditions
 
@@ -867,7 +867,7 @@ function [dtmin] = compute_time_step(dtmin)
 % dtconv       % Local convective time step restriction
 
 global four half fourth
-global vel2ref rmu rho dx dy cfl rkappa imax jmax uinf beta2 lambda_x lambda_y lambda_max dtconv
+global vel2ref rmu rho dx dy cfl rkappa imax jmax 
 global u dt
 
 
@@ -880,7 +880,7 @@ dtdiff = (dx.*dy)./(4.*nu);
 
 for j=2:jmax-1
     for i=2:imax-1
-      beta2(i,j) = max((u(i,j,2).^2) + (u(i,j,3).^2),rkappa*(uinf^2));
+      beta2(i,j) = max((u(i,j,2).^2) + (u(i,j,3).^2),rkappa*vel2ref);
       lambda_x(i,j) = half.*(abs(u(i,j,2)) + sqrt(((u(i,j,2)).^2) + four.*beta2(i,j)));
       lambda_y(i,j) = half.*(abs(u(i,j,3)) + sqrt(((u(i,j,3)).^2) + four.*beta2(i,j)));
       lambda_max(i,j) = max(max(lambda_x(i,j),lambda_y(i,j)));
@@ -917,7 +917,7 @@ function Compute_Artificial_Viscosity(~)
 % not used]
 
 global two four six half
-global imax jmax lim rho dx dy Cx Cy Cx2 Cy2 fsmall vel2ref rkappa lambda_x lambda_y beta2 zero
+global imax jmax lim rho dx dy Cx Cy Cx2 Cy2 fsmall vel2ref rkappa
 global u
 global artviscx artviscy
 
@@ -930,29 +930,32 @@ global artviscx artviscy
 
 for j=3:jmax-2
     for i=3:imax-2
+     beta2(i,j) = max((u(i,j,2).^2) + (u(i,j,3).^2),rkappa*vel2ref);
+     lambda_x(i,j) = half.*(abs(u(i,j,2)) + sqrt(((u(i,j,2)).^2) + four.*beta2(i,j)));
+     lambda_y(i,j) = half.*(abs(u(i,j,3)) + sqrt(((u(i,j,3)).^2) + four.*beta2(i,j)));
      artviscx(i,j) = (-lambda_x(i,j).*Cx.*(dx.^3)./beta2(i,j)).*((u(i+2,j,1) - four.*u(i+1,j,1) + six.*u(i,j,1) - four.*u(i-1,j,1) + u(i-2,j,1))./(dx.^4));
      artviscy(i,j) = (-lambda_y(i,j).*Cy.*(dy.^3)./beta2(i,j)).*((u(i,j+2,1) - four.*u(i,j+1,1) + six.*u(i,j,1) - four.*u(i,j-1,1) + u(i,j-2,1))./(dy.^4));
     end
 end
 
-xvisc(imax,:) = zero;
-yvisc(imax,:) = zero;
-xvisc(1,:) = zero;
-yvisc(1,:) = zero;
-xvisc(:,1) = zero;
-yvisc(:,1) = zero;
-xvisc(:,jmax) = zero; % UNSURE ABOUT THESE VISCOUS TERMS
-yvisc(:,jmax) = zero;
+%xvisc(imax,:) = zero;
+%yvisc(imax,:) = zero;
+%xvisc(1,:) = zero;
+%yvisc(1,:) = zero;
+%xvisc(:,1) = zero;
+%yvisc(:,1) = zero;
+%xvisc(:,jmax) = zero; % UNSURE ABOUT THESE VISCOUS TERMS
+%yvisc(:,jmax) = zero;
 
-xvisc(imax,jmax) = (xvisc(imax,jmax-1) + xvisc(imax-1,jmax)).*half;
-xvisc(1,jmax) = (xvisc(1,jmax-1) + xvisc(2,jmax)).*half;
-xvisc(imax,1) = (xvisc(imax-1,1) + xvisc(imax,2)).*half;
-xvisc(1,1) = (xvisc(2,1) + xvisc(1,2)).*half;
+%xvisc(imax,jmax) = (xvisc(imax,jmax-1) + xvisc(imax-1,jmax)).*half;
+%xvisc(1,jmax) = (xvisc(1,jmax-1) + xvisc(2,jmax)).*half;
+%xvisc(imax,1) = (xvisc(imax-1,1) + xvisc(imax,2)).*half;
+%xvisc(1,1) = (xvisc(2,1) + xvisc(1,2)).*half;
 
-yvisc(imax,jmax) = (yvisc(imax,jmax-1) + yvisc(imax-1,jmax)).*half;
-yvisc(1,jmax) = (yvisc(1,jmax-1) + yvisc(2,jmax)).*half;
-yvisc(imax,1) = (yvisc(imax-1,1) + yvisc(imax,2)).*half;
-yvisc(1,1) = (yvisc(2,1) + yvisc(1,2)).*half;
+%yvisc(imax,jmax) = (yvisc(imax,jmax-1) + yvisc(imax-1,jmax)).*half;
+%yvisc(1,jmax) = (yvisc(1,jmax-1) + yvisc(2,jmax)).*half;
+%yvisc(imax,1) = (yvisc(imax-1,1) + yvisc(imax,2)).*half;
+%yvisc(1,1) = (yvisc(2,1) + yvisc(1,2)).*half;
 
 
 
@@ -1062,8 +1065,8 @@ function point_Jacobi(~)
 % beta2        % Beta squared parameter for time derivative preconditioning
 % uvel2        % Velocity squared
 global two half
-global imax jmax rho rhoinv dx dy rkappa rmu vel2ref beta2
-global u uold artviscx artviscy dt s 
+global imax jmax rho rhoinv dx dy rkappa rmu vel2ref
+global u uold artviscx artviscy dt s
 
 % Point Jacobi method
 
@@ -1091,6 +1094,8 @@ for j=2:jmax-1
             d2udy2 = (uold(i,j+1,2)-(2.*uold(i,j,2))+uold(i,j-1,2))./(dy.^2);
             d2vdx2 = (uold(i+1,j,3)-(2.*uold(i,j,3))+uold(i-1,j,3))./(dx.^2);
             d2vdy2 = (uold(i,j+1,3)-(2.*uold(i,j,3))+uold(i,j-1,3))./(dy.^2);
+
+            beta2(i,j) = max((u(i,j,2).^2) + (u(i,j,3).^2),rkappa*vel2ref);
 
             u(i,j,1) = uold(i,j,1) - beta2(i,j).*dt(i,j).*((rho.*dudx + rho.*dvdy) - (artviscx(i,j) + artviscy(i,j)) - s(i,j,1));
             u(i,j,2) = uold(i,j,2) - (dt(i,j)./rho).*(rho.*uold(i,j,2).*dudx + rho.*uold(i,j,3).*dudy + dpdx - rmu.*d2udx2 - rmu.*d2udy2 - s(i,j,2));
@@ -1151,7 +1156,7 @@ function [res, resinit, conv] = check_iterative_convergence...
 % k                        % k index (# of equations)
 
 global zero
-global imax jmax neq fsmall beta2
+global imax jmax neq fsmall 
 global u uold dt fp1
 
 % Compute iterative residuals to monitor iterative convergence
@@ -1169,6 +1174,8 @@ for j=2:jmax-1
     for i=2:imax-1
         if n == 1
             uold(:,:,:) = -1;
+
+            beta2(i,j) = max((u(i,j,2).^2) + (u(i,j,3).^2),rkappa*vel2ref);
 
             p_resid = (u(i,j,1) - uold(i,j,1))./(beta2(i,j).*dt(i,j));
             u_resid = (u(i,j,2) - uold(i,j,2))./(beta2(i,j).*dt(i,j));
