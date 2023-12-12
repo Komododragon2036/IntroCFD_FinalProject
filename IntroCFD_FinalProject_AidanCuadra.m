@@ -65,7 +65,7 @@ lim = 1;              % variable to be used as the limiter sensor (= 1 for press
 cfl  = 0.5;      % CFL number used to determine time step
 Cx = 0.01;     	% Parameter for 4th order artificial viscosity in x
 Cy = 0.01;      	% Parameter for 4th order artificial viscosity in y
-toler = 1.e-10; 	% Tolerance for iterative residual convergence
+toler = 1.e-8; 	% Tolerance for iterative residual convergence
 rkappa = 0.1;   	% Time derivative preconditioning constant
 Re = 100.0;      	% Reynolds number = rho*Uinf*L/rmu
 pinf = 0.801333844662; % Initial pressure (N/m^2) -> from MMS value at cavity center
@@ -1062,8 +1062,8 @@ function point_Jacobi(~)
 % beta2        % Beta squared parameter for time derivative preconditioning
 % uvel2        % Velocity squared
 global two half
-global imax jmax rho rhoinv dx dy rkappa rmu vel2ref
-global u uold artviscx artviscy dt s n
+global imax jmax rho rhoinv dx dy rkappa rmu vel2ref beta2
+global u uold artviscx artviscy dt s 
 
 % Point Jacobi method
 
@@ -1076,15 +1076,27 @@ global u uold artviscx artviscy dt s n
 
 for j=2:jmax-1
     for i=2:imax-1
-        if n == 1
-            uold(:,:,:) = 9; % Arbitrary
+        % if n == 1
+            % uold(:,:,:) = 1; % Arbitrary
 
             % Point jacobi for pressure and velocity components
 
-            u(i,j,1) = uold(i,j,1) - beta2(i,j).*dt.*(rho.*(half.*(uold(i+1,j,2)-uold(i-1,j,2))./dx)+(half.*(uold(i,j+1,3)-uold(i,j-1,3))./dy) - (artviscx + artviscy) - s(i,j,1));
-            u(i,j,2) = uold(i,j,2) - (dt./rho).*((rho.*uold(i,j,2).*(half.*(uold(i+1,j,2)-uold(i-1,j,2))./dx) + rho.*uold(i,j,3).*(half.*(uold(i,j+1,2)-uold(i,j-1,2))./dy) + half.*(uold(i+1,j,1)-uold(i-1,j,1))./dx) - rmu.*((uold(i+1,j,2) - two.*uold(i,j,2) + uold(i-1,j,2))./(dx.^2)) - rmu.*((uold(i,j+1,2) - two.*uold(i,j,2) + uold(i,j-1,2))./(dy.^2)) - s(i,j,2)); 
-            u(i,j,3) = uold(i,j,3) - (dt./rho).*((rho.*uold(i,j,2).*(half.*(uold(i+1,j,3)-uold(i-1,j,3))./dx) + rho.*uold(i,j,3).*(half.*(uold(i,j+1,3)-uold(i,j-1,3))./dy) + half.*(uold(i+1,j,1)-uold(i-1,j,1))./dx) - rmu.*((uold(i+1,j,3) - two.*uold(i,j,3) + uold(i-1,j,3))./(dx.^2)) - rmu.*((uold(i,j+1,3) - two.*uold(i,j,3) + uold(i,j-1,3))./(dy.^2)) - s(i,j,3));
-        end
+            dudx = half.*((uold(i+1,j,2)-uold(i-1,j,2))./dx);
+            dvdy = half.*((uold(i,j+1,3)-uold(i,j-1,3))./dy);
+            dvdx = half.*((uold(i+1,j,3)-uold(i-1,j,3))./dx);
+            dudy = half.*((uold(i,j+1,2)-uold(i,j-1,2))./dy);
+            dpdx = half.*((uold(i+1,j,1)-uold(i-1,j,1))./dx);
+            dpdy = half.*((uold(i,j+1,1)-uold(i,j-1,1))./dy);
+            d2udx2 = (uold(i+1,j,2)-(2.*uold(i,j,2))+uold(i-1,j,2))./(dx.^2);
+            d2udy2 = (uold(i,j+1,2)-(2.*uold(i,j,2))+uold(i,j-1,2))./(dy.^2);
+            d2vdx2 = (uold(i+1,j,3)-(2.*uold(i,j,3))+uold(i-1,j,3))./(dx.^2);
+            d2vdy2 = (uold(i,j+1,3)-(2.*uold(i,j,3))+uold(i,j-1,3))./(dy.^2);
+
+            u(i,j,1) = uold(i,j,1) - beta2(i,j).*dt(i,j).*((rho.*dudx + rho.*dvdy) - (artviscx(i,j) + artviscy(i,j)) - s(i,j,1));
+            u(i,j,2) = uold(i,j,2) - (dt(i,j)./rho).*(rho.*uold(i,j,2).*dudx + rho.*uold(i,j,3).*dudy + dpdx - rmu.*d2udx2 - rmu.*d2udy2 - s(i,j,2));
+            u(i,j,3) = uold(i,j,3) - (dt(i,j)./rho).*(rho.*uold(i,j,2).*dvdx + rho.*uold(i,j,3).*dvdy + dpdy - rmu.*d2vdx2 - rmu.*d2vdy2 - s(i,j,3));
+
+        % end
     end
 end
 
@@ -1139,7 +1151,7 @@ function [res, resinit, conv] = check_iterative_convergence...
 % k                        % k index (# of equations)
 
 global zero
-global imax jmax neq fsmall p1_L2 u1_L2 v1_L2 beta2
+global imax jmax neq fsmall beta2
 global u uold dt fp1
 
 % Compute iterative residuals to monitor iterative convergence
@@ -1158,27 +1170,28 @@ for j=2:jmax-1
         if n == 1
             uold(:,:,:) = -1;
 
-            p_resid = (u(i,j,1) - uold(i,j,1))./(beta2(i,j).*dt);
-            u_resid = (u(i,j,2) - uold(i,j,2))./(beta2(i,j).*dt);
-            v_resid = (u(i,j,3) - uold(i,j,3))./(beta2(i,j).*dt);
+            p_resid = (u(i,j,1) - uold(i,j,1))./(beta2(i,j).*dt(i,j));
+            u_resid = (u(i,j,2) - uold(i,j,2))./(beta2(i,j).*dt(i,j));
+            v_resid = (u(i,j,3) - uold(i,j,3))./(beta2(i,j).*dt(i,j));
+
+            res(1) = sqrt(sum(abs(p_resid).^2, "all")/(imax*jmax));
+            res(2) = sqrt(sum(abs(u_resid).^2, "all")/(imax*jmax));
+            res(3) = sqrt(sum(abs(v_resid).^2, "all")/(imax*jmax));
 
         end
     end
 end
 
-p_L2 = norm(p_resid);
-u_L2 = norm(u_resid);
-v_L2 = norm(v_resid);
 
-if n == 1
-    p1_L2 = p_L2;
-    u1_L2 = u_L2;
-    v1_L2 = v_L2;
+resinit(1) = sqrt(sum(abs((u(:,:,1)-uold(:,:,1))./dt(:,:)).^2,'all')/(imax*jmax)); %L2 norm of continuity
+resinit(2) = sqrt(sum(abs((u(:,:,2)-uold(:,:,2))./dt(:,:)).^2,'all')/(imax*jmax)); %L2 norm of x mtm
+resinit(3) = sqrt(sum(abs((u(:,:,3)-uold(:,:,3))./dt(:,:)).^2,'all')/(imax*jmax)); %L2 norm of y mtm
+
+conv = max([res(1)./resinit(1), res(2)./resinit(2), res(3)./resinit(3)]);
+
+if resinit == 0
+    resinit = 1E-5;
 end
-
-conv = max([p_L2./p1_L2, u_L2./u1_L2, v_L2./v1_L2]);
-res = [p_L2,u_L2,v_L2];
-resinit = [p1_L2,u1_L2,v1_L2];
 
 % Write iterative residuals every 10 iterations
 if ( (mod(n,100)==0)||(n==ninit) )
